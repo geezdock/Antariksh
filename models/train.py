@@ -55,7 +55,7 @@ class CloudDataset(Dataset):
 
 def train_model(
     data_dir="data",
-    num_epochs=50,
+    num_epochs=30,
     batch_size=16,
     learning_rate=1e-4,
     image_size=256,
