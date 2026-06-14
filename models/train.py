@@ -76,7 +76,7 @@ def train_model(
     criterion = nn.L1Loss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = ReduceLROnPlateau(
-        optimizer, mode="min", factor=0.5, patience=10, verbose=True
+        optimizer, mode="min", factor=0.5, patience=10
     )
 
     train_losses = []
