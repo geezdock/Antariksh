@@ -4,16 +4,18 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 import matplotlib.pyplot as plt
 
 from models.unet import UNet
 
 
 class CloudDataset(Dataset):
-    def __init__(self, root_dir, image_size=256):
+    def __init__(self, root_dir, image_size=256, augment=False):
         self.cloudy_dir = os.path.join(root_dir, "cloudy")
         self.clean_dir = os.path.join(root_dir, "clean")
         self.image_size = image_size
+        self.augment = augment
         self.filenames = sorted(os.listdir(self.cloudy_dir))
 
     def __len__(self):
@@ -34,6 +36,15 @@ class CloudDataset(Dataset):
         cloudy = cloudy.astype(np.float32) / 255.0
         clean = clean.astype(np.float32) / 255.0
 
+        if self.augment:
+            brightness = np.random.uniform(0.85, 1.15)
+            contrast = np.random.uniform(0.85, 1.15)
+            cloudy = np.clip((cloudy - 0.5) * contrast + 0.5 + (brightness - 1.0), 0, 1)
+
+            if np.random.rand() > 0.5:
+                noise = np.random.normal(0, np.random.uniform(0.005, 0.02), cloudy.shape).astype(np.float32)
+                cloudy = np.clip(cloudy + noise, 0, 1)
+
         cloudy = torch.from_numpy(cloudy).permute(2, 0, 1)
         clean = torch.from_numpy(clean).permute(2, 0, 1)
 
@@ -53,15 +64,18 @@ def train_model(
     os.makedirs(checkpoint_dir, exist_ok=True)
     os.makedirs(results_dir, exist_ok=True)
 
-    train_dataset = CloudDataset(os.path.join(data_dir, "train"), image_size)
-    val_dataset = CloudDataset(os.path.join(data_dir, "val"), image_size)
+    train_dataset = CloudDataset(os.path.join(data_dir, "train"), image_size, augment=True)
+    val_dataset = CloudDataset(os.path.join(data_dir, "val"), image_size, augment=False)
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=2)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=2)
 
     model = UNet(in_channels=3, out_channels=3).to(device)
-    criterion = nn.MSELoss()
+    criterion = nn.L1Loss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    scheduler = ReduceLROnPlateau(
+        optimizer, mode="min", factor=0.5, patience=10, verbose=True
+    )
 
     train_losses = []
     val_losses = []
@@ -96,8 +110,10 @@ def train_model(
         avg_val_loss = epoch_val_loss / len(val_loader)
         val_losses.append(avg_val_loss)
 
+        scheduler.step(avg_val_loss)
+
         print(
-            f"Epoch {epoch:3d}/{num_epochs} | Train Loss: {avg_train_loss:.6f} | Val Loss: {avg_val_loss:.6f}"
+            f"Epoch {epoch:3d}/{num_epochs} | Train Loss: {avg_train_loss:.6f} | Val Loss: {avg_val_loss:.6f} | LR: {optimizer.param_groups[0]['lr']:.2e}"
         )
 
         if epoch % 10 == 0:
