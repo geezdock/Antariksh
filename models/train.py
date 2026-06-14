@@ -30,8 +30,10 @@ class CloudDataset(Dataset):
         clean = cv2.imread(clean_path)
         clean = cv2.cvtColor(clean, cv2.COLOR_BGR2RGB)
 
-        cloudy = cv2.resize(cloudy, (self.image_size, self.image_size))
-        clean = cv2.resize(clean, (self.image_size, self.image_size))
+        h, w = cloudy.shape[:2]
+        if h != self.image_size or w != self.image_size:
+            cloudy = cv2.resize(cloudy, (self.image_size, self.image_size))
+            clean = cv2.resize(clean, (self.image_size, self.image_size))
 
         cloudy = cloudy.astype(np.float32) / 255.0
         clean = clean.astype(np.float32) / 255.0
@@ -53,8 +55,8 @@ class CloudDataset(Dataset):
 
 def train_model(
     data_dir="data",
-    num_epochs=100,
-    batch_size=8,
+    num_epochs=50,
+    batch_size=16,
     learning_rate=1e-4,
     image_size=256,
     device="cuda" if torch.cuda.is_available() else "cpu",
@@ -67,8 +69,8 @@ def train_model(
     train_dataset = CloudDataset(os.path.join(data_dir, "train"), image_size, augment=True)
     val_dataset = CloudDataset(os.path.join(data_dir, "val"), image_size, augment=False)
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=2)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=2)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=0)
 
     model = UNet(in_channels=3, out_channels=3).to(device)
     criterion = nn.L1Loss()
